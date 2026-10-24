@@ -3,8 +3,8 @@
 [English](README.md) | **Deutsch**
 
 Kleines Desktop-Tool, das eine `server_blacklist.txt` für Source-Spiele erstellt, vor allem für **Counter-Strike: Source**.
-Die Datei wird im Ingame-Serverbrowser importiert. Danach verschwinden Fake-Server, Spam-Server,
-Redirect-/Bot-Server oder alle Server aus einem gewählten Land (z.B. Russland) aus der Serverliste.
+Die Datei wird im Ingame-Serverbrowser importiert. Danach verschwinden russischsprachige Server, Server aus
+gewählten Ländern oder Server mit bestimmten Wörtern im Namen aus der Serverliste.
 
 ## Warum?
 
@@ -14,15 +14,15 @@ aber jeden einzeln von Hand einzutragen ist mühsam. Dieses Tool findet sie und 
 
 ## Funktionen
 
+- Geführter Ablauf in dunkler Oberfläche: Start, Steam-Key, Filter, Prüfen, Speichern
 - Lädt die komplette aktuelle Serverliste eines Spiels von Steam
-- Markiert IPs nach einfachen, einstellbaren Regeln:
-  - **Land** der IP (z.B. `RU`, `RU,BY`)
+- Markiert IPs nach einfachen Regeln:
   - **Kyrillische Schrift** im Servernamen oder in der Spielbeschreibung (erwischt russisch-/ukrainischsprachige Server, egal wo sie gehostet sind)
-  - **Viele Server auf einer IP** (typisch für Fake-/Spam-Hoster, Standard: ab 30)
-  - **Unrealistische Slotzahl** (`max_players` über einem Grenzwert, Standard: 66)
+  - **Land** der IP (z.B. `RU`, `RU,BY`)
   - **Stichwörter** im Servernamen
-- Ergebnis prüfen und IPs vor dem Übernehmen an- oder abwählen
-- IPs manuell hinzufügen, ganze IP-Listen einfügen, bestehende Blacklist-Dateien importieren und zusammenführen
+- Ergebnis prüfen und Haken bei IPs entfernen, die bleiben sollen
+- Bestehende Blacklist erweitern oder bearbeiten, einzelne IPs hinzufügen oder ganze IP-Listen einfügen
+- Speichern über den normalen Datei-Dialog des Systems (unter Windows der Explorer)
 - Schreibt eine gültige `server_blacklist.txt`: ein Eintrag pro IP, immer mit Port `0` (= alle Ports der IP), ohne Duplikate
 
 ## Download
@@ -39,47 +39,39 @@ Die JAR ist die einzige Datei, die du brauchst. Läuft unter Windows, Linux und 
 
 ## Bedienung
 
-### 1. Steam Web API Key holen
+Das Tool führt dich in fünf Schritten durch:
 
-Die Serverliste kommt über die offizielle Steam Web API. Dafür braucht es einen kostenlosen Key:
-<https://steamcommunity.com/dev/apikey> (als Domain geht alles, z.B. `localhost`).
+1. **Start:** "Neue Blacklist erstellen", "Vorhandene Blacklist erweitern" (deine bisherige Datei laden und
+   ergänzen) oder "Vorhandene Blacklist nur bearbeiten" (ohne Serversuche).
+2. **Steam-Key:** Die Serverliste kommt über die offizielle Steam Web API, dafür braucht es einen kostenlosen Key.
+   "Key-Seite öffnen" öffnet <https://steamcommunity.com/dev/apikey>. Als Domain geht alles, z.B. `localhost`.
+   Den 32-stelligen Key einfügen. Er wird für das nächste Mal gespeichert.
+3. **Filter:** auswählen, was weg soll. Eine IP wird markiert, wenn **eine** gewählte Regel zutrifft:
 
-### 2. Server suchen (Tab "Server suchen")
-
-1. Key in "Steam Web API Key" einfügen.
-2. AppID des Spiels eintragen (`240` = Counter-Strike: Source).
-3. Regeln einstellen. Eine IP wird markiert, wenn **eine** Regel zutrifft. Zahl auf `0` setzen oder Feld leer lassen schaltet die Regel ab.
-
-   | Feld | Bedeutung |
+   | Option | Bedeutung |
    |---|---|
-   | "Länder" | Ländercodes ([ISO 3166-1 alpha-2](https://de.wikipedia.org/wiki/ISO-3166-1-Kodierliste)), kommagetrennt, z.B. `RU` oder `RU,BY` |
-   | "+ kyrillische Schrift in Server-/Spielname" | Markiert IPs, bei denen ein Servername oder die Spielbeschreibung (Spalte "Spiel" im Serverbrowser) kyrillische Buchstaben enthält. Standardmäßig an |
-   | "Ab N Servern pro IP" | Markiert IPs mit mindestens N Servern |
-   | "max_players über" | Markiert Server mit mehr Slots als angegeben |
-   | "Name enthält" | Kommagetrennte Stichwörter, Groß-/Kleinschreibung egal |
+   | "Russisch- und ukrainischsprachige Server" | Servername oder Spielbeschreibung (Spalte "Spiel" im Serverbrowser) enthält kyrillische Buchstaben. Standardmäßig an |
+   | "Server aus bestimmten Ländern" | Ländercodes ([ISO 3166-1 alpha-2](https://de.wikipedia.org/wiki/ISO-3166-1-Kodierliste)), kommagetrennt, z.B. `RU` oder `RU, BY` |
+   | "Bestimmte Wörter im Servernamen" | Kommagetrennte Stichwörter, Groß-/Kleinschreibung egal |
 
-4. "Server laden" klicken. Das dauert etwa 20–30 Sekunden, beim ersten Mal wird zusätzlich die Länder-Datenbank geladen (siehe [Funktionsweise](#funktionsweise)).
-5. Ergebnis prüfen. Markierte IPs sind schon angehakt, die Spalte "Grund" zeigt die zutreffende Regel.
-   Regel geändert? "Neu bewerten" wendet sie ohne neuen Download an.
-6. "Ausgewählte zur Blacklist" klicken.
+   "Server suchen" dauert etwa 20–30 Sekunden, beim ersten Mal wird zusätzlich die Länder-Datenbank geladen
+   (siehe [Funktionsweise](#funktionsweise)). Gehst du innerhalb von 10 Minuten zurück und änderst die Filter,
+   wird die geladene Liste wiederverwendet und das Ergebnis ist sofort da.
+4. **Prüfen:** Markierte IPs sind angehakt, die Spalte "Grund" zeigt die zutreffende Regel. Haken bei IPs
+   entfernen, die bleiben sollen. Die Liste lässt sich durchsuchen, auf Wunsch auch mit den nicht markierten IPs.
+5. **Speichern:** Endgültige Liste prüfen, Namen per Doppelklick ändern (sie erscheinen im Spiel), IPs
+   hinzufügen oder entfernen, dann "Datei speichern …". Danach zeigt das Tool, wie die Datei ins Spiel kommt.
 
-### 3. Blacklist speichern (Tab "Blacklist")
+### Im Spiel importieren
 
-- "Eintrag hinzufügen..." fügt eine einzelne IP hinzu, "IPs einfügen..." eine eingefügte Liste (eine IP pro Zeile).
-- "Datei importieren..." führt eine bestehende `server_blacklist.txt` zusammen, z.B. die, die dein Spiel schon nutzt.
-- Doppelklick auf einen Namen zum Bearbeiten. Der Name wird im Spiel im Tab "Blacklisted Servers" angezeigt.
-- "Speichern als..." schreibt die Datei.
-
-### 4. Im Spiel importieren
-
-1. Serverbrowser öffnen, Tab **Blacklisted Servers**.
+1. Serverbrowser öffnen, Tab **Server-Blacklist** (englischer Client: "Blacklisted Servers").
 2. **Import servers from file** klicken und die gespeicherte `server_blacklist.txt` wählen.
 
 Der Import ergänzt die bereits geblacklisteten Server. Alternativ das Spiel schließen und die Datei nach
 `Steam/steamapps/common/Counter-Strike Source/cstrike/cfg/server_blacklist.txt` kopieren.
-Das ersetzt die aktuelle Blacklist des Spiels. Wer sie behalten will, importiert sie vorher ins Tool.
+Das ersetzt die aktuelle Blacklist des Spiels. Wer sie behalten will, startet mit "Vorhandene Blacklist erweitern" und lädt sie vorher.
 
-Sehr große Listen lassen den Serverbrowser beim Öffnen kurz einfrieren. Liste also gezielt halten.
+Sehr große Listen lassen den Serverbrowser beim Öffnen kurz einfrieren.
 
 ## Funktionsweise
 
@@ -116,8 +108,7 @@ Sehr große Listen lassen den Serverbrowser beim Öffnen kurz einfrieren. Liste 
   **gerade** gelistet sind. Neue Server tauchen erst nach erneutem Laden auf.
 - Die Kyrillisch-Regel trifft auch Namen, die nur zur Deko einen kyrillischen Buchstaben nutzen (z.B. `м` in `Gλмß`).
 - Spielbeschreibungen gibt es nur von Servern, die auf die UDP-Abfrage antworten, und für höchstens 5 Server pro IP.
-- Die Regeln sind Heuristiken. Liste vor dem Übernehmen prüfen, besonders bei "viele Server pro IP",
-  denn auch große seriöse Hoster betreiben viele Server auf einer IP.
+- Die Regeln sind Heuristiken. Liste im Schritt "Prüfen" vor dem Speichern kontrollieren.
 
 ## Datenschutz
 
@@ -128,7 +119,9 @@ so wie es auch der Serverbrowser im Spiel tut.
 
 ## Selbst bauen
 
-Benötigt JDK 17+. Keine weiteren Abhängigkeiten, kein Build-Tool nötig.
+Benötigt JDK 17+ und beim ersten Build Internet. Kein Build-Tool nötig: Die Scripts laden
+[FlatLaf](https://www.formdev.com/flatlaf/) (dunkles Theme und native Datei-Dialoge) von Maven Central,
+prüfen die SHA-256-Prüfsumme und packen es mit in die JAR. Das Release bleibt so eine einzige Datei.
 
 ```sh
 ./build.sh                    # Linux/macOS/Git Bash
@@ -142,7 +135,9 @@ Aufbau (`src/main/java/blacklist/`):
 
 | Datei | Zweck |
 |---|---|
-| `MainWindow.java` | Swing-Oberfläche |
+| `MainWindow.java` | Wizard-Oberfläche |
+| `Theme.java`, `FileDialogs.java` | Dunkles Theme und native Datei-Dialoge (FlatLaf) |
+| `BlacklistTableModel.java`, `ScanTableModel.java` | Tabellen für die Schritte Prüfen und Speichern |
 | `SteamServerQuery.java` | Download der Serverliste über die Steam Web API |
 | `A2sQuery.java` | Spielbeschreibung per A2S_INFO-UDP-Abfrage |
 | `CountryDb.java` | IP-zu-Land-Zuordnung aus den RIR-Daten |
@@ -163,11 +158,12 @@ git push origin v1.0.0
 ## Mitmachen
 
 Issues und Pull Requests sind willkommen, egal ob Fehlerberichte, neue Filterideen oder Unterstützung weiterer Source-Spiele.
-Bitte keine externen Abhängigkeiten einbauen.
+Bitte keine Abhängigkeiten außer FlatLaf einbauen.
 
 ## Danksagung
 
 - [Ballganda/css-server-blacklist](https://github.com/Ballganda/css-server-blacklist): ursprüngliche Idee und Filter-Heuristiken
+- [FlatLaf](https://www.formdev.com/flatlaf/) von FormDev Software (Apache License 2.0): dunkles Theme und native Datei-Dialoge
 - [Steam-Guide zur Server-Blacklist](https://steamcommunity.com/sharedfiles/filedetails/?id=3013281836)
 
 ## Lizenz

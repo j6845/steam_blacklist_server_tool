@@ -11,13 +11,12 @@ import java.util.Set;
 /** Groups servers per IP and flags IPs matching any of the criteria. */
 final class ServerScan {
 
-    /** Disabled criteria: empty set / false / 0 / empty list. */
-    record Criteria(Set<String> countries, boolean cyrillic, int minServersPerIp, int maxPlayersAbove,
-                    List<String> nameKeywords) {
+    /** Disabled criteria: empty set / false / empty list. */
+    record Criteria(Set<String> countries, boolean cyrillic, List<String> nameKeywords) {
     }
 
     /** All servers sharing one IP. */
-    record IpGroup(String ip, String country, int serverCount, int maxPlayers, int players,
+    record IpGroup(String ip, String country, int serverCount, int players,
                    String sampleName, String sampleGame, String reason) {
 
         boolean flagged() {
@@ -57,13 +56,11 @@ final class ServerScan {
             String ip = e.getKey();
             List<SteamServerQuery.ServerInfo> list = e.getValue();
             String country = geo != null ? geo.lookup(ip) : "??";
-            int maxPlayers = 0;
             int players = 0;
             String keywordHit = null;
             SteamServerQuery.ServerInfo cyrillicHit = null;
             String sampleGame = "";
             for (SteamServerQuery.ServerInfo s : list) {
-                maxPlayers = Math.max(maxPlayers, s.maxPlayers());
                 players += s.players();
                 String game = games.getOrDefault(s.ip() + ":" + s.queryPort(), "");
                 if (sampleGame.isEmpty()) {
@@ -85,18 +82,12 @@ final class ServerScan {
             if (c.cyrillic() && cyrillicHit != null) {
                 reasons.add("Kyrillisch");
             }
-            if (c.minServersPerIp() > 0 && list.size() >= c.minServersPerIp()) {
-                reasons.add(list.size() + " Server/IP");
-            }
-            if (c.maxPlayersAbove() > 0 && maxPlayers > c.maxPlayersAbove()) {
-                reasons.add("max_players " + maxPlayers);
-            }
             if (keywordHit != null) {
                 reasons.add("Name '" + keywordHit + "'");
             }
             // Show the server that triggered the Cyrillic rule, it explains the flag best.
             String sampleName = (c.cyrillic() && cyrillicHit != null ? cyrillicHit : list.get(0)).name();
-            result.add(new IpGroup(ip, country, list.size(), maxPlayers, players,
+            result.add(new IpGroup(ip, country, list.size(), players,
                     sampleName, sampleGame, String.join(", ", reasons)));
         }
         result.sort((a, b) -> Integer.compare(b.serverCount(), a.serverCount()));
