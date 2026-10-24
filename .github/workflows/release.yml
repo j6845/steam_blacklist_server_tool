@@ -1,6 +1,7 @@
 name: Release
 
-# Push a tag like v1.0.0 to build the JAR and publish a GitHub release with it.
+# Push a tag like v1.0.0 to build the JAR and the Windows package (JAR + minimal Java runtime)
+# and publish a GitHub release with both.
 on:
   push:
     tags:
@@ -11,7 +12,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -20,17 +21,20 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Build JAR
+      - name: Build JAR and Windows package
+        shell: pwsh
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          VERSION="$VERSION" sh build.sh
+          $version = "$env:GITHUB_REF_NAME".TrimStart('v')
+          "VERSION=$version" >> $env:GITHUB_ENV
+          ./package.ps1 -Version $version
 
       - name: Create release
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            "build/steam-blacklist-tool-$VERSION.jar" \
-            --title "$GITHUB_REF_NAME" \
+          gh release create "$env:GITHUB_REF_NAME" `
+            "build/steam-blacklist-tool-$env:VERSION-windows.zip" `
+            "build/steam-blacklist-tool-$env:VERSION.jar" `
+            --title "$env:GITHUB_REF_NAME" `
             --generate-notes

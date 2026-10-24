@@ -27,15 +27,23 @@ aber jeden einzeln von Hand einzutragen ist mühsam. Dieses Tool findet sie und 
 
 ## Download
 
-1. **Java 17 oder neuer** installieren, z.B. von [Adoptium](https://adoptium.net/).
-2. `steam-blacklist-tool-<version>.jar` aus dem
-   [neuesten Release](https://github.com/j6845/steam_blacklist_server_tool/releases/latest) herunterladen.
-3. Per Doppelklick starten oder im Terminal:
-   ```
-   java -jar steam-blacklist-tool-<version>.jar
-   ```
+### Windows (ohne Java-Installation)
 
-Die JAR ist die einzige Datei, die du brauchst. Läuft unter Windows, Linux und macOS.
+1. `steam-blacklist-tool-<version>-windows.zip` aus dem
+   [neuesten Release](https://github.com/j6845/steam_blacklist_server_tool/releases/latest) herunterladen.
+2. Irgendwohin entpacken.
+3. Doppelklick auf `SteamBlacklistTool\Start.bat`.
+
+Die Zip enthält das Tool und eine minimale Java-Laufzeit (ca. 30 MB), die nur das Nötigste für das Tool enthält.
+Es wird nichts installiert.
+
+### Linux, macOS oder Java schon installiert
+
+`steam-blacklist-tool-<version>.jar` aus demselben Release herunterladen und mit Java 17 oder neuer starten:
+
+```
+java -jar steam-blacklist-tool-<version>.jar
+```
 
 ## Bedienung
 
@@ -131,6 +139,9 @@ java -jar build/steam-blacklist-tool.jar
 
 Optional mit Version: `VERSION=1.2.0 ./build.sh` oder `.\build.ps1 -Version 1.2.0`.
 
+Das Windows-Paket mit mitgelieferter Laufzeit baut `.\package.ps1 -Version 1.2.0` unter Windows.
+Es erzeugt per `jlink` eine Java-Laufzeit, die nur die Module enthält, die das Tool braucht.
+
 Aufbau (`src/main/java/blacklist/`):
 
 | Datei | Zweck |
@@ -148,7 +159,7 @@ Aufbau (`src/main/java/blacklist/`):
 ## Release erstellen
 
 Releases baut GitHub Actions ([`.github/workflows/release.yml`](.github/workflows/release.yml)).
-Einen Versions-Tag pushen, der Workflow baut die JAR und hängt sie an ein neues GitHub-Release:
+Einen Versions-Tag pushen, der Workflow baut die JAR und das Windows-Paket und hängt beides an ein neues GitHub-Release:
 
 ```sh
 git tag v1.0.0
