@@ -47,6 +47,7 @@ import javax.swing.table.TableRowSorter;
 final class MainWindow extends JFrame {
 
     private static final String API_KEY_URL = "https://steamcommunity.com/dev/apikey";
+    private static final int A2S_MAX_PER_IP = 5;
 
     private final Preferences prefs = Preferences.userNodeForPackage(MainWindow.class);
 
@@ -59,6 +60,8 @@ final class MainWindow extends JFrame {
     private final JPasswordField apiKeyField = new JPasswordField(prefs.get("apiKey", ""), 32);
     private final JSpinner appIdSpinner = new JSpinner(new SpinnerNumberModel(prefs.getInt("appId", 240), 1, Integer.MAX_VALUE, 1));
     private final JTextField countriesField = new JTextField(prefs.get("countries", "RU"), 20);
+    private final JCheckBox cyrillicBox =
+            new JCheckBox("+ kyrillische Schrift in Server-/Spielname", prefs.getBoolean("cyrillic", true));
     private final JSpinner minServersSpinner = new JSpinner(new SpinnerNumberModel(prefs.getInt("minServers", 30), 0, 100000, 1));
     private final JSpinner maxPlayersSpinner = new JSpinner(new SpinnerNumberModel(prefs.getInt("maxPlayers", 66), 0, 1000, 1));
     private final JTextField keywordsField = new JTextField(prefs.get("keywords", ""), 20);
@@ -73,6 +76,8 @@ final class MainWindow extends JFrame {
 
     private CountryDb countryDb;
     private List<SteamServerQuery.ServerInfo> lastServers = List.of();
+    private Map<String, String> lastGames = Map.of();
+    private int lastTruncated;
 
     MainWindow() {
         super(title());
@@ -264,10 +269,14 @@ final class MainWindow extends JFrame {
         keyRow.add(apiKeyField);
         keyRow.add(keyLink);
 
+        JPanel countryRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        countryRow.add(countriesField);
+        countryRow.add(cyrillicBox);
+
         JPanel criteria = form(
                 new String[] {"Steam Web API Key", "AppID (240 = CS:S)", "Länder (ISO, kommagetrennt)",
                     "Ab N Servern pro IP (0 = aus)", "max_players über (0 = aus)", "Name enthält (kommagetrennt)"},
-                new JComponent[] {keyRow, appIdSpinner, countriesField, minServersSpinner, maxPlayersSpinner, keywordsField});
+                new JComponent[] {keyRow, appIdSpinner, countryRow, minServersSpinner, maxPlayersSpinner, keywordsField});
         criteria.setBorder(BorderFactory.createTitledBorder("Kriterien (eines reicht zum Markieren)"));
 
         loadButton.addActionListener(e -> loadServers());
@@ -294,7 +303,7 @@ final class MainWindow extends JFrame {
         top.add(actions, BorderLayout.SOUTH);
 
         scanTable.setRowSorter(scanSorter);
-        int[] widths = {50, 120, 50, 60, 80, 60, 350, 250};
+        int[] widths = {50, 120, 50, 60, 80, 60, 300, 150, 220};
         for (int i = 0; i < widths.length; i++) {
             scanTable.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         }
@@ -324,15 +333,21 @@ final class MainWindow extends JFrame {
         setBusy(true);
 
         new SwingWorker<List<ServerScan.IpGroup>, String>() {
-            private List<SteamServerQuery.ServerInfo> servers;
+            private SteamServerQuery.Result result;
+            private Map<String, String> games = Map.of();
 
             @Override
             protected List<ServerScan.IpGroup> doInBackground() throws Exception {
                 if (countryDb == null) {
                     countryDb = CountryDb.load(this::publish);
                 }
-                servers = SteamServerQuery.fetch(key, appId, this::publish);
-                return ServerScan.analyze(servers, countryDb, criteria);
+                result = SteamServerQuery.fetch(key, appId, this::publish);
+                if (criteria.cyrillic()) {
+                    // The game description is only needed where the server name isn't Cyrillic already.
+                    games = A2sQuery.queryGames(ServerScan.withoutCyrillicName(result.servers()),
+                            A2S_MAX_PER_IP, this::publish);
+                }
+                return ServerScan.analyze(result.servers(), countryDb, games, criteria);
             }
 
             @Override
@@ -345,7 +360,9 @@ final class MainWindow extends JFrame {
                 setBusy(false);
                 try {
                     List<ServerScan.IpGroup> groups = get();
-                    lastServers = servers;
+                    lastServers = result.servers();
+                    lastGames = games;
+                    lastTruncated = result.truncated();
                     showScan(groups);
                 } catch (ExecutionException ex) {
                     scanStatus.setText("Fehler.");
@@ -359,7 +376,7 @@ final class MainWindow extends JFrame {
 
     private void reevaluate() {
         savePrefs(new String(apiKeyField.getPassword()).trim());
-        showScan(ServerScan.analyze(lastServers, countryDb, criteria()));
+        showScan(ServerScan.analyze(lastServers, countryDb, lastGames, criteria()));
     }
 
     private void showScan(List<ServerScan.IpGroup> groups) {
@@ -367,8 +384,14 @@ final class MainWindow extends JFrame {
         applyScanFilter();
         reevaluateButton.setEnabled(!lastServers.isEmpty());
         long flagged = groups.stream().filter(ServerScan.IpGroup::flagged).count();
-        scanStatus.setText(lastServers.size() + " Server auf " + groups.size() + " IPs, "
-                + flagged + " IPs markiert.");
+        String status = lastServers.size() + " Server auf " + groups.size() + " IPs, " + flagged + " IPs markiert.";
+        if (cyrillicBox.isSelected() && lastGames.isEmpty()) {
+            status += " Spielnamen nicht geladen: für Kyrillisch im Spielnamen 'Server laden'.";
+        }
+        if (lastTruncated > 0) {
+            status += " Achtung: " + lastTruncated + " Teillisten unvollständig (Steam-Limit).";
+        }
+        scanStatus.setText(status);
     }
 
     private void addScanSelection() {
@@ -422,7 +445,7 @@ final class MainWindow extends JFrame {
                 keywords.add(k.trim());
             }
         }
-        return new ServerScan.Criteria(countries, (Integer) minServersSpinner.getValue(),
+        return new ServerScan.Criteria(countries, cyrillicBox.isSelected(), (Integer) minServersSpinner.getValue(),
                 (Integer) maxPlayersSpinner.getValue(), keywords);
     }
 
@@ -430,6 +453,7 @@ final class MainWindow extends JFrame {
         prefs.put("apiKey", key);
         prefs.putInt("appId", (Integer) appIdSpinner.getValue());
         prefs.put("countries", countriesField.getText());
+        prefs.putBoolean("cyrillic", cyrillicBox.isSelected());
         prefs.putInt("minServers", (Integer) minServersSpinner.getValue());
         prefs.putInt("maxPlayers", (Integer) maxPlayersSpinner.getValue());
         prefs.put("keywords", keywordsField.getText());
@@ -573,7 +597,7 @@ final class MainWindow extends JFrame {
     /** Scan result per IP with a checkbox column; flagged IPs start checked. */
     private static final class ScanModel extends AbstractTableModel {
         private static final String[] COLS =
-                {"Auswahl", "IP", "Land", "Server", "max_players", "Spieler", "Beispielname", "Grund"};
+                {"Auswahl", "IP", "Land", "Server", "max_players", "Spieler", "Beispielname", "Spiel", "Grund"};
         private List<ServerScan.IpGroup> groups = List.of();
         private boolean[] selected = new boolean[0];
 
@@ -640,6 +664,7 @@ final class MainWindow extends JFrame {
                 case 4 -> g.maxPlayers();
                 case 5 -> g.players();
                 case 6 -> g.sampleName();
+                case 7 -> g.sampleGame();
                 default -> g.reason();
             };
         }

@@ -17,6 +17,7 @@ adding them one by one by hand is tedious. This tool finds them for you and writ
 - Downloads the full current server list of a game from Steam
 - Flags IPs by simple, adjustable rules:
   - **Country** of the IP (e.g. `RU`, `RU,BY`)
+  - **Cyrillic script** in the server name or game description (catches Russian/Ukrainian-language servers hosted anywhere)
   - **Many servers on one IP** (typical for fake/spam hosts, default: 30 or more)
   - **Unrealistic slot count** (`max_players` above a limit, default: 66)
   - **Keywords** in the server name
@@ -54,11 +55,12 @@ The server list is fetched through the official Steam Web API, which needs a fre
    | Field | Meaning |
    |---|---|
    | "Länder" | Country codes ([ISO 3166-1 alpha-2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2)), comma separated, e.g. `RU` or `RU,BY` |
+   | "+ kyrillische Schrift in Server-/Spielname" | Flag IPs where a server name or the game description (the "Game" column in the server browser) contains Cyrillic letters. On by default |
    | "Ab N Servern pro IP" | Flag IPs that host at least N servers |
    | "max_players über" | Flag servers with more slots than this |
    | "Name enthält" | Comma-separated keywords, matched case-insensitively against the server name |
 
-4. Click "Server laden". The first run also downloads the country database (see [How it works](#how-it-works)), so it takes a moment.
+4. Click "Server laden". This takes about 20–30 seconds; the first run also downloads the country database (see [How it works](#how-it-works)).
 5. Check the result table. Flagged IPs are already ticked. The "Grund" column says which rule matched.
    Changed a rule? "Neu bewerten" applies it without downloading again.
 6. Click "Ausgewählte zur Blacklist".
@@ -83,8 +85,14 @@ Very large lists make the server browser freeze for a moment when it opens. Keep
 
 ## How it works
 
-- **Server list:** Steam Web API `IGameServersService/GetServerList`. The API limits results per request,
-  so the tool splits the query by region and by empty/non-empty servers, then merges and deduplicates.
+- **Server list:** Steam Web API `IGameServersService/GetServerList`. The API returns at most 10,000 servers
+  per request, and CS:S alone lists far more (around 58,000, mostly fakes). Whenever a request hits that cap,
+  the tool splits it further (by region, players, VAC, dedicated, OS, password, finally by map) until every
+  part is complete, then merges and deduplicates.
+- **Game description:** the Steam Web API doesn't provide the "Game" column, so the tool asks the game
+  servers directly with the standard Source `A2S_INFO` UDP query, the same query the in-game server browser
+  sends. Only IPs without a Cyrillic server name are asked, at most 5 servers per IP: each queried address
+  takes up an entry in your router's NAT table, and asking tens of thousands of fake servers would overflow it.
 - **Country lookup:** the public allocation statistics of the five Regional Internet Registries
   (RIPE NCC, ARIN, APNIC, LACNIC, AFRINIC). No account or extra key needed. About 45 MB are downloaded to
   `~/.steam_blacklist_tool/rir/` on first use and refreshed after 7 days.
@@ -108,6 +116,8 @@ Very large lists make the server browser freeze for a moment when it opens. Keep
 - The country is the **registration country** of the IP block, not necessarily where the server physically runs.
 - The blacklist only knows single IPs, not IP ranges. "All Russian servers" means all of them listed
   **right now**. New servers show up after loading again.
+- The Cyrillic rule also hits names that only use a Cyrillic look-alike letter for style (e.g. `м` in `Gλмß`).
+- Game descriptions are only known for servers that answer the UDP query, and for at most 5 servers per IP.
 - Rules are heuristics. Check the list before you add it, especially for the "many servers per IP" rule,
   since big legitimate hosters can run many servers on one IP too.
 
@@ -115,7 +125,8 @@ Very large lists make the server browser freeze for a moment when it opens. Keep
 
 Your API key and settings are stored only on your computer, in plain text, via Java Preferences
 (on Windows: registry under `HKEY_CURRENT_USER\Software\JavaSoft\Prefs`). The key is only sent to
-`api.steampowered.com`.
+`api.steampowered.com`. For the game description, the tool contacts the listed game servers directly,
+just like the in-game server browser does.
 
 ## Building from source
 
@@ -135,6 +146,7 @@ Source layout (`src/main/java/blacklist/`):
 |---|---|
 | `MainWindow.java` | Swing UI |
 | `SteamServerQuery.java` | Steam Web API server list download |
+| `A2sQuery.java` | Game description via A2S_INFO UDP query |
 | `CountryDb.java` | IP to country lookup from RIR data |
 | `ServerScan.java` | Grouping by IP and rule evaluation |
 | `BlacklistFile.java` | Reading and writing `server_blacklist.txt` |
