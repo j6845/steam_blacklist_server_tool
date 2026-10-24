@@ -129,9 +129,17 @@ Very large lists make the server browser freeze for a moment when it opens.
 
 ## Privacy
 
-Your API key and settings are stored only on your computer, in plain text, via Java Preferences
-(on Windows: registry under `HKEY_CURRENT_USER\Software\JavaSoft\Prefs`). The key is only sent to
-`api.steampowered.com`. For the game description, the tool contacts the listed game servers directly,
+All settings (filters, words, countries, AppID, last folder) are saved automatically as soon as you change them,
+only on your computer, via Java Preferences (on Windows: registry under `HKEY_CURRENT_USER\Software\JavaSoft\Prefs`).
+
+The API key is never stored in plain text:
+- **Windows:** encrypted with DPAPI for your Windows account. Only your account on this computer can decrypt it,
+  not other users and not someone who copies the registry or disk.
+- **Linux/macOS:** encrypted with AES-GCM; the random key lives in `~/.steam_blacklist_tool/secret.key`,
+  readable only by your user.
+
+Like any program that remembers a password, the tool itself (and other programs running under your account)
+can still decrypt it. The key is only sent to `api.steampowered.com`. For the game description, the tool contacts the listed game servers directly,
 just like the in-game server browser does.
 
 ## Building from source

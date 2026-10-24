@@ -36,7 +36,9 @@ final class BlacklistFile {
 
     /** Parses all "server" blocks; entries with invalid addr are skipped. */
     static List<BlacklistEntry> read(Path file) throws IOException {
-        String text = Files.readString(file, StandardCharsets.UTF_8);
+        // Lenient decoding: the game cuts names after 63 bytes, often in the middle of a UTF-8 character.
+        // new String(...) replaces such broken sequences instead of failing like Files.readString.
+        String text = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
         if (text.startsWith("﻿")) {
             text = text.substring(1);
         }

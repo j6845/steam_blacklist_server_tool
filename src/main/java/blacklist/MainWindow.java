@@ -12,7 +12,10 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.File;
+import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,6 +26,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -79,7 +83,9 @@ final class MainWindow extends JFrame {
     private final Set<String> scanIps = new HashSet<>();
 
     // Step: Steam key
-    private final JPasswordField apiKeyField = new JPasswordField(prefs.get("apiKey", ""), 34);
+    // Filled in the background from SecretStore (decrypting takes ~0.5 s on Windows).
+    private final JPasswordField apiKeyField = new JPasswordField(34);
+    private String savedKey = "";
     private final JSpinner appIdSpinner = new JSpinner(new SpinnerNumberModel(prefs.getInt("appId", 240), 1, Integer.MAX_VALUE, 1));
     private final JLabel keyHint = new JLabel(" ");
 
@@ -98,7 +104,7 @@ final class MainWindow extends JFrame {
     private final ScanTableModel scan = new ScanTableModel();
     private final JTable scanTable = new JTable(scan);
     private final TableRowSorter<ScanTableModel> scanSorter = new TableRowSorter<>(scan);
-    private final JCheckBox showAllBox = new JCheckBox("Auch nicht markierte IPs anzeigen");
+    private final JCheckBox showAllBox = new JCheckBox("Auch nicht markierte IPs anzeigen", prefs.getBoolean("showAll", false));
     private final JTextField scanSearch = new JTextField(18);
     private final JLabel reviewSummary = new JLabel();
 
@@ -138,6 +144,23 @@ final class MainWindow extends JFrame {
         setMinimumSize(new Dimension(820, 600));
         setLocationRelativeTo(null);
         showStep(START);
+        // Settings of removed filters (up to 1.2.0).
+        prefs.remove("minServers");
+        prefs.remove("maxPlayers");
+        loadKey();
+        autoSavePrefs();
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                savePrefs();
+                saveKey();
+                try {
+                    prefs.flush();
+                } catch (BackingStoreException ignored) {
+                    // nothing more we can do while closing
+                }
+            }
+        });
     }
 
     private static String title() {
@@ -217,7 +240,7 @@ final class MainWindow extends JFrame {
         switch (step) {
             case KEY -> {
                 if (validateKey()) {
-                    savePrefs();
+                    saveKey();
                     showStep(FILTER);
                 }
             }
@@ -267,9 +290,10 @@ final class MainWindow extends JFrame {
 
     private boolean loadExisting() {
         File f = FileDialogs.open(this, lastDir());
-        if (f == null) {
-            return false;
-        }
+        return f != null && loadFile(f);
+    }
+
+    private boolean loadFile(File f) {
         rememberDir(f);
         try {
             List<BlacklistEntry> entries = BlacklistFile.read(f.toPath());
@@ -540,10 +564,8 @@ final class MainWindow extends JFrame {
         blacklist.removeIps(scanIps);
         scanIps.clear();
         for (ServerScan.IpGroup g : scan.selected()) {
+            // BlacklistEntry shortens the name to what the game keeps (63 bytes).
             String name = (g.flagged() ? g.reason() : "Manuell") + " | " + g.ip() + " | " + g.sampleName();
-            if (name.length() > 120) {
-                name = name.substring(0, 120);
-            }
             if (blacklist.add(BlacklistEntry.now(name, g.ip()))) {
                 scanIps.add(g.ip());
             }
@@ -638,9 +660,12 @@ final class MainWindow extends JFrame {
 
     private void saveFile() {
         File f = FileDialogs.save(this, lastDir(), savedFile != null ? savedFile.getName() : "server_blacklist.txt");
-        if (f == null) {
-            return;
+        if (f != null) {
+            writeTo(f);
         }
+    }
+
+    private void writeTo(File f) {
         rememberDir(f);
         try {
             BlacklistFile.write(f.toPath(), blacklist.entries());
@@ -718,8 +743,54 @@ final class MainWindow extends JFrame {
 
     // ---------------------------------------------------------------- helpers
 
+    /** Decrypts the stored key in the background; the start page doesn't need it yet. */
+    private void loadKey() {
+        new SwingWorker<String, Void>() {
+            @Override
+            protected String doInBackground() {
+                return SecretStore.load(prefs);
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    savedKey = get();
+                    if (apiKeyField.getPassword().length == 0) {
+                        apiKeyField.setText(savedKey);
+                    }
+                } catch (InterruptedException | ExecutionException ignored) {
+                    // no stored key: the user enters it
+                }
+            }
+        }.execute();
+    }
+
+    /** Stores the key encrypted, only when it changed (encrypting starts PowerShell on Windows). */
+    private void saveKey() {
+        String key = apiKey();
+        if (key.equals(savedKey) || !key.isEmpty() && !key.matches("[0-9A-Fa-f]{32}")) {
+            return;
+        }
+        try {
+            SecretStore.save(prefs, key);
+            savedKey = key;
+        } catch (IOException ex) {
+            error("Der Key konnte nicht verschlüsselt gespeichert werden:\n" + ex.getMessage());
+        }
+    }
+
+    /** Saves every setting as soon as it changes, so nothing is lost when the window is closed. */
+    private void autoSavePrefs() {
+        for (JCheckBox box : new JCheckBox[] {russianBox, noGameBox, noSteamBox, countryBox, keywordBox, showAllBox}) {
+            box.addActionListener(e -> savePrefs());
+        }
+        for (JTextField field : new JTextField[] {countriesField, keywordsField}) {
+            field.getDocument().addDocumentListener(onChange(this::savePrefs));
+        }
+        appIdSpinner.addChangeListener(e -> savePrefs());
+    }
+
     private void savePrefs() {
-        prefs.put("apiKey", apiKey());
         prefs.putInt("appId", (Integer) appIdSpinner.getValue());
         prefs.putBoolean("cyrillic", russianBox.isSelected());
         prefs.putBoolean("noGameOn", noGameBox.isSelected());
@@ -728,6 +799,7 @@ final class MainWindow extends JFrame {
         prefs.put("countries", countriesField.getText());
         prefs.putBoolean("keywordOn", keywordBox.isSelected());
         prefs.put("keywords", keywordsField.getText());
+        prefs.putBoolean("showAll", showAllBox.isSelected());
     }
 
     private File lastDir() {

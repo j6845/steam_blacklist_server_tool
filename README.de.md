@@ -129,9 +129,18 @@ Sehr große Listen lassen den Serverbrowser beim Öffnen kurz einfrieren.
 
 ## Datenschutz
 
-API Key und Einstellungen bleiben auf deinem Rechner, im Klartext, gespeichert über Java Preferences
-(unter Windows: Registry unter `HKEY_CURRENT_USER\Software\JavaSoft\Prefs`). Der Key wird nur an
-`api.steampowered.com` gesendet. Für die Spielbeschreibung kontaktiert das Tool die gelisteten Gameserver direkt,
+Alle Einstellungen (Filter, Wörter, Länder, AppID, zuletzt benutzter Ordner) werden automatisch gespeichert, sobald
+du sie änderst, und zwar nur auf deinem Rechner über Java Preferences (unter Windows: Registry unter
+`HKEY_CURRENT_USER\Software\JavaSoft\Prefs`).
+
+Der API Key wird nie im Klartext gespeichert:
+- **Windows:** verschlüsselt mit DPAPI für dein Windows-Konto. Nur dein Konto auf diesem Rechner kann ihn
+  entschlüsseln, keine anderen Benutzer und niemand, der Registry oder Festplatte kopiert.
+- **Linux/macOS:** verschlüsselt mit AES-GCM; der zufällige Schlüssel liegt in `~/.steam_blacklist_tool/secret.key`
+  und ist nur für deinen Benutzer lesbar.
+
+Wie bei jedem Programm, das sich ein Passwort merkt, kann das Tool selbst (und andere Programme unter deinem Konto)
+ihn trotzdem entschlüsseln. Der Key wird nur an `api.steampowered.com` gesendet. Für die Spielbeschreibung kontaktiert das Tool die gelisteten Gameserver direkt,
 so wie es auch der Serverbrowser im Spiel tut.
 
 ## Selbst bauen
