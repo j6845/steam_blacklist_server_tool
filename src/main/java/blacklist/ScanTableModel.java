@@ -8,7 +8,7 @@ import javax.swing.table.AbstractTableModel;
 final class ScanTableModel extends AbstractTableModel {
 
     private static final String[] COLS =
-            {"Sperren", "IP", "Land", "Server", "Spieler", "Grund", "Servername", "Spiel"};
+            {"Sperren", "IP", "Land", "Server", "Spieler", "Grund", "Servername", "Spiel", "Tags"};
     private List<ServerScan.IpGroup> groups = List.of();
     private boolean[] selected = new boolean[0];
 
@@ -75,7 +75,8 @@ final class ScanTableModel extends AbstractTableModel {
             case 4 -> g.players();
             case 5 -> g.reason();
             case 6 -> g.sampleName();
-            default -> g.sampleGame();
+            case 7 -> g.sampleGame();
+            default -> g.sampleTags();
         };
     }
 

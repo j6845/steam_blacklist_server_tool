@@ -84,10 +84,12 @@ final class MainWindow extends JFrame {
     private final JLabel keyHint = new JLabel(" ");
 
     // Step: filters
-    private final JCheckBox cyrillicBox = new JCheckBox("Russisch- und ukrainischsprachige Server", prefs.getBoolean("cyrillic", true));
+    private final JCheckBox russianBox = new JCheckBox("Russisch- und ukrainischsprachige Server", prefs.getBoolean("cyrillic", true));
+    private final JCheckBox noGameBox = new JCheckBox("Server ohne Spielangabe", prefs.getBoolean("noGameOn", true));
+    private final JCheckBox noSteamBox = new JCheckBox("NoSteam-Server", prefs.getBoolean("noSteamOn", true));
     private final JCheckBox countryBox = new JCheckBox("Server aus bestimmten Ländern", prefs.getBoolean("countryOn", true));
     private final JTextField countriesField = new JTextField(prefs.get("countries", "RU"), 12);
-    private final JCheckBox keywordBox = new JCheckBox("Bestimmte Wörter im Servernamen", prefs.getBoolean("keywordOn", false));
+    private final JCheckBox keywordBox = new JCheckBox("Bestimmte Wörter", prefs.getBoolean("keywordOn", false));
     private final JTextField keywordsField = new JTextField(prefs.get("keywords", ""), 24);
     private final JProgressBar progress = new JProgressBar();
     private final JLabel searchStatus = new JLabel(" ");
@@ -111,7 +113,6 @@ final class MainWindow extends JFrame {
     private CountryDb countryDb;
     private List<SteamServerQuery.ServerInfo> lastServers = List.of();
     private Map<String, String> lastGames = Map.of();
-    private boolean gamesLoaded;
     private int lastAppId;
     private long lastLoadTime;
     private int lastTruncated;
@@ -336,11 +337,16 @@ final class MainWindow extends JFrame {
                 "Eine Server-IP wird gesperrt, sobald einer der gewählten Punkte zutrifft. "
                         + "Im nächsten Schritt kannst du das Ergebnis noch prüfen.");
         p.add(Box.createVerticalStrut(18));
-        p.add(filterRow(cyrillicBox, null, "Kyrillische Schrift im Server- oder Spielnamen, egal wo der Server steht."));
+        p.add(filterRow(russianBox, null,
+                "Kyrillische Schrift, eine .ru-Adresse oder der Tag „ru“ bei Servername, Spiel oder Tags."));
+        p.add(filterRow(noGameBox, null,
+                "In der Spalte „Spiel“ stehen nur Sonderzeichen statt eines Spielnamens, z.B. █ █ █ █."));
+        p.add(filterRow(noSteamBox, null,
+                "Server für Spieler ohne Steam: „NoSteam“, „no-steam“ oder „non-steam“ bei Servername, Spiel oder Tags."));
         p.add(filterRow(countryBox, row(muted("Ländercodes:"), countriesField, muted("z.B. RU oder RU, BY")),
                 "Nach dem Land, in dem die IP-Adresse registriert ist."));
         p.add(filterRow(keywordBox, row(keywordsField, muted("mehrere mit Komma trennen")),
-                "Server, deren Name eines dieser Wörter enthält."));
+                "Eines dieser Wörter kommt im Servernamen, im Spiel oder in den Tags vor."));
         for (JCheckBox box : new JCheckBox[] {countryBox, keywordBox}) {
             box.addActionListener(e -> updateFilterFields());
         }
@@ -381,12 +387,14 @@ final class MainWindow extends JFrame {
                 }
             }
         }
-        return new ServerScan.Criteria(countries, cyrillicBox.isSelected(), keywords);
+        return new ServerScan.Criteria(countries, russianBox.isSelected(), noGameBox.isSelected(),
+                noSteamBox.isSelected(), keywords);
     }
 
     private void startSearch() {
         ServerScan.Criteria criteria = criteria();
-        if (criteria.countries().isEmpty() && !criteria.cyrillic() && criteria.nameKeywords().isEmpty()) {
+        if (criteria.countries().isEmpty() && !criteria.russian() && !criteria.noGame() && !criteria.noSteam()
+                && criteria.keywords().isEmpty()) {
             searchStatus.setForeground(Theme.ERROR);
             searchStatus.setText("Bitte mindestens einen Punkt auswählen.");
             return;
@@ -394,8 +402,7 @@ final class MainWindow extends JFrame {
         savePrefs();
         int appId = (Integer) appIdSpinner.getValue();
         boolean cacheValid = !lastServers.isEmpty() && lastAppId == appId
-                && System.currentTimeMillis() - lastLoadTime < CACHE_MS
-                && (!criteria.cyrillic() || gamesLoaded);
+                && System.currentTimeMillis() - lastLoadTime < CACHE_MS;
         if (cacheValid) {
             showScan(ServerScan.analyze(lastServers, countryDb, lastGames, criteria));
             showStep(REVIEW);
@@ -416,12 +423,9 @@ final class MainWindow extends JFrame {
                 }
                 publish("Lade Serverliste von Steam ...");
                 result = SteamServerQuery.fetch(key, appId, this::publish);
-                if (criteria.cyrillic()) {
-                    // The game description is only needed where the server name isn't Cyrillic already.
-                    publish("Frage Spielnamen bei den Servern ab ...");
-                    games = A2sQuery.queryGames(ServerScan.withoutCyrillicName(result.servers()),
-                            A2S_MAX_PER_IP, this::publish);
-                }
+                // Always loaded, so changing the filters later doesn't need a new search.
+                publish("Frage Spielnamen bei den Servern ab ...");
+                games = A2sQuery.queryGames(result.servers(), A2S_MAX_PER_IP, this::publish);
                 return ServerScan.analyze(result.servers(), countryDb, games, criteria);
             }
 
@@ -437,7 +441,6 @@ final class MainWindow extends JFrame {
                     List<ServerScan.IpGroup> groups = get();
                     lastServers = result.servers();
                     lastGames = games;
-                    gamesLoaded = criteria.cyrillic();
                     lastAppId = appId;
                     lastLoadTime = System.currentTimeMillis();
                     lastTruncated = result.truncated();
@@ -489,7 +492,7 @@ final class MainWindow extends JFrame {
 
         scanTable.setRowSorter(scanSorter);
         scanTable.setFillsViewportHeight(true);
-        int[] widths = {60, 120, 50, 60, 60, 200, 320, 160};
+        int[] widths = {60, 115, 45, 55, 55, 170, 300, 150, 180};
         for (int i = 0; i < widths.length; i++) {
             scanTable.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         }
@@ -521,7 +524,7 @@ final class MainWindow extends JFrame {
                     return false;
                 }
                 return q.isEmpty() || (g.ip() + " " + g.country() + " " + g.sampleName() + " " + g.sampleGame()
-                        + " " + g.reason()).toLowerCase(Locale.ROOT).contains(q);
+                        + " " + g.sampleTags() + " " + g.reason()).toLowerCase(Locale.ROOT).contains(q);
             }
         });
     }
@@ -718,7 +721,9 @@ final class MainWindow extends JFrame {
     private void savePrefs() {
         prefs.put("apiKey", apiKey());
         prefs.putInt("appId", (Integer) appIdSpinner.getValue());
-        prefs.putBoolean("cyrillic", cyrillicBox.isSelected());
+        prefs.putBoolean("cyrillic", russianBox.isSelected());
+        prefs.putBoolean("noGameOn", noGameBox.isSelected());
+        prefs.putBoolean("noSteamOn", noSteamBox.isSelected());
         prefs.putBoolean("countryOn", countryBox.isSelected());
         prefs.put("countries", countriesField.getText());
         prefs.putBoolean("keywordOn", keywordBox.isSelected());

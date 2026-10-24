@@ -3,8 +3,8 @@
 [English](README.md) | **Deutsch**
 
 Kleines Desktop-Tool, das eine `server_blacklist.txt` für Source-Spiele erstellt, vor allem für **Counter-Strike: Source**.
-Die Datei wird im Ingame-Serverbrowser importiert. Danach verschwinden russischsprachige Server, Server aus
-gewählten Ländern oder Server mit bestimmten Wörtern im Namen aus der Serverliste.
+Die Datei wird im Ingame-Serverbrowser importiert. Danach verschwinden russischsprachige Server, Fake-Server
+ohne Spielangabe, NoSteam-Server, Server aus gewählten Ländern oder Server mit bestimmten Wörtern aus der Serverliste.
 
 ## Warum?
 
@@ -17,9 +17,13 @@ aber jeden einzeln von Hand einzutragen ist mühsam. Dieses Tool findet sie und 
 - Geführter Ablauf in dunkler Oberfläche: Start, Steam-Key, Filter, Prüfen, Speichern
 - Lädt die komplette aktuelle Serverliste eines Spiels von Steam
 - Markiert IPs nach einfachen Regeln:
-  - **Kyrillische Schrift** im Servernamen oder in der Spielbeschreibung (erwischt russisch-/ukrainischsprachige Server, egal wo sie gehostet sind)
+  - **Russisch-/ukrainischsprachige Server:** kyrillische Schrift, eine `.ru`-Adresse oder der Tag `ru`, egal wo der Server steht
+  - **Keine Spielangabe:** in der Spalte "Spiel" stehen nur Sonderzeichen wie `█ █ █ █` (typisch für Fake-Server)
+  - **NoSteam-Server:** Hinweise wie `NoSteam`, `no-steam` oder `non-steam`
   - **Land** der IP (z.B. `RU`, `RU,BY`)
-  - **Stichwörter** im Servernamen
+  - **Stichwörter**
+
+  Alle Text-Regeln prüfen Servername, Spielbeschreibung und Tags.
 - Ergebnis prüfen und Haken bei IPs entfernen, die bleiben sollen
 - Bestehende Blacklist erweitern oder bearbeiten, einzelne IPs hinzufügen oder ganze IP-Listen einfügen
 - Speichern über den normalen Datei-Dialog des Systems (unter Windows der Explorer)
@@ -58,9 +62,11 @@ Das Tool führt dich in fünf Schritten durch:
 
    | Option | Bedeutung |
    |---|---|
-   | "Russisch- und ukrainischsprachige Server" | Servername oder Spielbeschreibung (Spalte "Spiel" im Serverbrowser) enthält kyrillische Buchstaben. Standardmäßig an |
+   | "Russisch- und ukrainischsprachige Server" | Servername, Spielbeschreibung (Spalte "Spiel" im Serverbrowser) oder Tags enthalten kyrillische Buchstaben oder eine `.ru`-Adresse, oder die Tags enthalten `ru`. Standardmäßig an |
+   | "Server ohne Spielangabe" | Die Spielbeschreibung enthält keine Buchstaben oder Ziffern, nur Sonderzeichen wie `█ █ █ █`. Standardmäßig an |
+   | "NoSteam-Server" | Servername, Spielbeschreibung oder Tags enthalten `NoSteam`, `no-steam`, `no steam`, `non-steam` oder `nonsteam`. Standardmäßig an |
    | "Server aus bestimmten Ländern" | Ländercodes ([ISO 3166-1 alpha-2](https://de.wikipedia.org/wiki/ISO-3166-1-Kodierliste)), kommagetrennt, z.B. `RU` oder `RU, BY` |
-   | "Bestimmte Wörter im Servernamen" | Kommagetrennte Stichwörter, Groß-/Kleinschreibung egal |
+   | "Bestimmte Wörter" | Kommagetrennte Stichwörter, geprüft gegen Servername, Spielbeschreibung und Tags, Groß-/Kleinschreibung egal |
 
    "Server suchen" dauert etwa 20–30 Sekunden, beim ersten Mal wird zusätzlich die Länder-Datenbank geladen
    (siehe [Funktionsweise](#funktionsweise)). Gehst du innerhalb von 10 Minuten zurück und änderst die Filter,
@@ -88,9 +94,10 @@ Sehr große Listen lassen den Serverbrowser beim Öffnen kurz einfrieren.
   sie weiter auf (nach Region, Spielern, VAC, dedicated, Betriebssystem, Passwort, zuletzt Map), bis jeder Teil
   vollständig ist, und führt alles ohne Duplikate zusammen.
 - **Spielbeschreibung:** Die Spalte "Spiel" liefert die Steam Web API nicht. Das Tool fragt die Gameserver deshalb
-  direkt mit der Standard-Source-Abfrage `A2S_INFO` per UDP, genau wie der Serverbrowser im Spiel. Gefragt werden nur
-  IPs ohne kyrillischen Servernamen, höchstens 5 Server pro IP: Jede abgefragte Adresse belegt einen Eintrag in der
+  direkt mit der Standard-Source-Abfrage `A2S_INFO` per UDP, genau wie der Serverbrowser im Spiel. Gefragt werden
+  höchstens 5 Server pro IP (unterschiedliche Servernamen zuerst): Jede abgefragte Adresse belegt einen Eintrag in der
   NAT-Tabelle deines Routers, und zehntausende Fake-Server würden sie überlaufen lassen.
+  Die Tags liefert die Steam Web API mit (Feld `gametype`).
 - **Länderzuordnung:** die öffentlichen Vergabestatistiken der fünf Regional Internet Registries
   (RIPE NCC, ARIN, APNIC, LACNIC, AFRINIC). Kein Konto, kein weiterer Key. Beim ersten Start werden ca. 45 MB nach
   `~/.steam_blacklist_tool/rir/` geladen und nach 7 Tagen erneuert.
@@ -116,6 +123,8 @@ Sehr große Listen lassen den Serverbrowser beim Öffnen kurz einfrieren.
   **gerade** gelistet sind. Neue Server tauchen erst nach erneutem Laden auf.
 - Die Kyrillisch-Regel trifft auch Namen, die nur zur Deko einen kyrillischen Buchstaben nutzen (z.B. `м` in `Gλмß`).
 - Spielbeschreibungen gibt es nur von Servern, die auf die UDP-Abfrage antworten, und für höchstens 5 Server pro IP.
+  Ein Server, der nicht antwortet, wird nie als "ohne Spielangabe" markiert.
+- Die NoSteam-Regel trifft auch normale Server, die Spieler ohne Steam nur zulassen und das in den Tags angeben.
 - Die Regeln sind Heuristiken. Liste im Schritt "Prüfen" vor dem Speichern kontrollieren.
 
 ## Datenschutz

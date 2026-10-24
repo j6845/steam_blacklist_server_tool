@@ -3,8 +3,8 @@
 **English** | [Deutsch](README.de.md)
 
 A small desktop tool to build a `server_blacklist.txt` for Source engine games, mainly **Counter-Strike: Source**.
-Import the file in the in-game server browser and Russian-language servers, servers from chosen countries
-or servers with certain words in their name disappear from your server list.
+Import the file in the in-game server browser and Russian-language servers, fake servers without a game
+description, NoSteam servers, servers from chosen countries or servers with certain words disappear from your server list.
 
 ## Why?
 
@@ -17,9 +17,13 @@ adding them one by one by hand is tedious. This tool finds them for you and writ
 - Step-by-step wizard with a dark interface: start, Steam key, filters, review, save
 - Downloads the complete current server list of a game from Steam
 - Flags IPs by simple rules:
-  - **Cyrillic script** in the server name or game description (catches Russian/Ukrainian-language servers hosted anywhere)
+  - **Russian/Ukrainian-language servers:** Cyrillic script, a `.ru` address or the tag `ru`, no matter where the server is hosted
+  - **No game description:** the "Game" column shows only symbols like `█ █ █ █` (typical for fake servers)
+  - **NoSteam servers:** hints like `NoSteam`, `no-steam` or `non-steam`
   - **Country** of the IP (e.g. `RU`, `RU,BY`)
-  - **Keywords** in the server name
+  - **Keywords**
+
+  All text rules check the server name, the game description and the tags.
 - Review the result and untick IPs you want to keep
 - Extend or edit an existing blacklist, add single IPs or paste whole IP lists
 - Saves through the normal system file dialog (Explorer on Windows)
@@ -58,9 +62,11 @@ The app is in German and walks you through five steps. Labels are quoted below a
 
    | Option | Meaning |
    |---|---|
-   | "Russisch- und ukrainischsprachige Server" | A server name or the game description (the "Game" column in the server browser) contains Cyrillic letters. On by default |
+   | "Russisch- und ukrainischsprachige Server" | Server name, game description (the "Game" column in the server browser) or tags contain Cyrillic letters or a `.ru` address, or the tags contain `ru`. On by default |
+   | "Server ohne Spielangabe" | The game description contains no letters or digits, only symbols like `█ █ █ █`. On by default |
+   | "NoSteam-Server" | Server name, game description or tags contain `NoSteam`, `no-steam`, `no steam`, `non-steam` or `nonsteam`. On by default |
    | "Server aus bestimmten Ländern" | Country codes ([ISO 3166-1 alpha-2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2)), comma separated, e.g. `RU` or `RU, BY` |
-   | "Bestimmte Wörter im Servernamen" | Comma-separated keywords, matched case-insensitively |
+   | "Bestimmte Wörter" | Comma-separated keywords, matched case-insensitively against server name, game description and tags |
 
    "Server suchen" takes about 20–30 seconds; the first run also downloads the country database
    (see [How it works](#how-it-works)). If you go back and change the filters within 10 minutes, the
@@ -89,8 +95,9 @@ Very large lists make the server browser freeze for a moment when it opens.
   part is complete, then merges and deduplicates.
 - **Game description:** the Steam Web API doesn't provide the "Game" column, so the tool asks the game
   servers directly with the standard Source `A2S_INFO` UDP query, the same query the in-game server browser
-  sends. Only IPs without a Cyrillic server name are asked, at most 5 servers per IP: each queried address
-  takes up an entry in your router's NAT table, and asking tens of thousands of fake servers would overflow it.
+  sends. At most 5 servers per IP are asked (different server names first): each queried address takes up
+  an entry in your router's NAT table, and asking tens of thousands of fake servers would overflow it.
+  The tags come with the Steam Web API (field `gametype`).
 - **Country lookup:** the public allocation statistics of the five Regional Internet Registries
   (RIPE NCC, ARIN, APNIC, LACNIC, AFRINIC). No account or extra key needed. About 45 MB are downloaded to
   `~/.steam_blacklist_tool/rir/` on first use and refreshed after 7 days.
@@ -116,6 +123,8 @@ Very large lists make the server browser freeze for a moment when it opens.
   **right now**. New servers show up after loading again.
 - The Cyrillic rule also hits names that only use a Cyrillic look-alike letter for style (e.g. `м` in `Gλмß`).
 - Game descriptions are only known for servers that answer the UDP query, and for at most 5 servers per IP.
+  A server that doesn't answer is never flagged as "no game description".
+- The NoSteam rule also hits regular servers that merely allow players without Steam and say so in their tags.
 - Rules are heuristics. Check the list in the review step before saving.
 
 ## Privacy

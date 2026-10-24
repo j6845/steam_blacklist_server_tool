@@ -1,23 +1,33 @@
 package blacklist;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
 
-/** Groups servers per IP and flags IPs matching any of the criteria. */
+/** Groups servers per IP and flags IPs matching any of the criteria. Rules look at name, game and tags. */
 final class ServerScan {
 
+    /** ".ru" domain, e.g. "SGaming.RU", but not ".rules". */
+    private static final Pattern RU_DOMAIN = Pattern.compile("(?i)\\.ru(?![a-z0-9])");
+    /** "ru" as a whole tag, e.g. "bhop,ru,startmoney". */
+    private static final Pattern RU_TAG = Pattern.compile("(?i)(^|,)\\s*ru\\s*(,|$)");
+    /** "NoSteam", "no-steam", "no steam", "non-steam", "nonsteam" (but not "onlysteam"). */
+    private static final Pattern NO_STEAM = Pattern.compile("(?i)(?<![a-z])non?[-_ ]?steam(?![a-z])");
+
     /** Disabled criteria: empty set / false / empty list. */
-    record Criteria(Set<String> countries, boolean cyrillic, List<String> nameKeywords) {
+    record Criteria(Set<String> countries, boolean russian, boolean noGame, boolean noSteam,
+                    List<String> keywords) {
     }
 
     /** All servers sharing one IP. */
     record IpGroup(String ip, String country, int serverCount, int players,
-                   String sampleName, String sampleGame, String reason) {
+                   String sampleName, String sampleGame, String sampleTags, String reason) {
 
         boolean flagged() {
             return !reason.isEmpty();
@@ -31,19 +41,13 @@ final class ServerScan {
         return s.codePoints().anyMatch(cp -> Character.UnicodeScript.of(cp) == Character.UnicodeScript.CYRILLIC);
     }
 
-    /** Servers on IPs where no server name contains Cyrillic; only these need a game description lookup. */
-    static List<SteamServerQuery.ServerInfo> withoutCyrillicName(List<SteamServerQuery.ServerInfo> servers) {
-        Set<String> cyrillicIps = new HashSet<>();
-        for (SteamServerQuery.ServerInfo s : servers) {
-            if (hasCyrillic(s.name())) {
-                cyrillicIps.add(s.ip());
-            }
-        }
-        return servers.stream().filter(s -> !cyrillicIps.contains(s.ip())).toList();
+    /** Game description made only of symbols, e.g. "█ █ █ █". Unknown (null) is not "missing". */
+    static boolean gameMissing(String game) {
+        return game != null && game.codePoints().noneMatch(Character::isLetterOrDigit);
     }
 
     /**
-     * @param games game description per "ip:queryPort" from {@link A2sQuery}, may be empty
+     * @param games game description per "ip:queryPort" from {@link A2sQuery}; servers that didn't answer are missing
      */
     static List<IpGroup> analyze(List<SteamServerQuery.ServerInfo> servers, CountryDb geo,
                                  Map<String, String> games, Criteria c) {
@@ -56,51 +60,67 @@ final class ServerScan {
             String ip = e.getKey();
             List<SteamServerQuery.ServerInfo> list = e.getValue();
             String country = geo != null ? geo.lookup(ip) : "??";
-            int players = 0;
-            String keywordHit = null;
-            SteamServerQuery.ServerInfo cyrillicHit = null;
-            String sampleGame = "";
-            for (SteamServerQuery.ServerInfo s : list) {
-                players += s.players();
-                String game = games.getOrDefault(s.ip() + ":" + s.queryPort(), "");
-                if (sampleGame.isEmpty()) {
-                    sampleGame = game;
-                }
-                if (keywordHit == null) {
-                    keywordHit = matchKeyword(s.name(), c.nameKeywords());
-                }
-                if (cyrillicHit == null && (hasCyrillic(s.name()) || hasCyrillic(game))) {
-                    cyrillicHit = s;
-                    sampleGame = game;
-                }
-            }
 
-            List<String> reasons = new ArrayList<>();
+            // Each reason is reported once per IP; the first server that triggered anything is shown as sample.
+            Set<String> reasons = new LinkedHashSet<>();
             if (c.countries().contains(country)) {
                 reasons.add("Land " + country);
             }
-            if (c.cyrillic() && cyrillicHit != null) {
-                reasons.add("Kyrillisch");
+            SteamServerQuery.ServerInfo sample = null;
+            int players = 0;
+            for (SteamServerQuery.ServerInfo s : list) {
+                players += s.players();
+                String game = games.get(s.ip() + ":" + s.queryPort());
+                int before = reasons.size();
+                check(s, game, c, reasons);
+                if (sample == null && reasons.size() > before) {
+                    sample = s;
+                }
             }
-            if (keywordHit != null) {
-                reasons.add("Name '" + keywordHit + "'");
+            if (sample == null) {
+                sample = list.get(0);
             }
-            // Show the server that triggered the Cyrillic rule, it explains the flag best.
-            String sampleName = (c.cyrillic() && cyrillicHit != null ? cyrillicHit : list.get(0)).name();
-            result.add(new IpGroup(ip, country, list.size(), players,
-                    sampleName, sampleGame, String.join(", ", reasons)));
+            String sampleGame = games.getOrDefault(sample.ip() + ":" + sample.queryPort(), "");
+            result.add(new IpGroup(ip, country, list.size(), players, sample.name(), sampleGame, sample.tags(),
+                    String.join(", ", reasons)));
         }
         result.sort((a, b) -> Integer.compare(b.serverCount(), a.serverCount()));
         return result;
     }
 
-    private static String matchKeyword(String name, List<String> keywords) {
-        String lower = name.toLowerCase(Locale.ROOT);
-        for (String k : keywords) {
-            if (lower.contains(k.toLowerCase(Locale.ROOT))) {
-                return k;
+    private static void check(SteamServerQuery.ServerInfo s, String game, Criteria c, Set<String> reasons) {
+        String[] texts = {s.name(), game != null ? game : "", s.tags()};
+        if (c.russian()) {
+            if (anyMatch(texts, ServerScan::hasCyrillic)) {
+                reasons.add("Kyrillisch");
+            }
+            if (anyMatch(texts, t -> RU_DOMAIN.matcher(t).find())) {
+                reasons.add(".ru");
+            }
+            if (RU_TAG.matcher(s.tags()).find()) {
+                reasons.add("Tag ru");
             }
         }
-        return null;
+        if (c.noGame() && gameMissing(game)) {
+            reasons.add("Spiel fehlt");
+        }
+        if (c.noSteam() && anyMatch(texts, t -> NO_STEAM.matcher(t).find())) {
+            reasons.add("NoSteam");
+        }
+        for (String k : c.keywords()) {
+            String lower = k.toLowerCase(Locale.ROOT);
+            if (anyMatch(texts, t -> t.toLowerCase(Locale.ROOT).contains(lower))) {
+                reasons.add("Wort '" + k + "'");
+            }
+        }
+    }
+
+    private static boolean anyMatch(String[] texts, Predicate<String> p) {
+        for (String t : texts) {
+            if (p.test(t)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

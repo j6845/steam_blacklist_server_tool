@@ -30,7 +30,8 @@ import java.util.stream.Collectors;
 final class SteamServerQuery {
 
     /** One game server as reported by the master server. */
-    record ServerInfo(String ip, int port, int queryPort, String name, String map,
+    /** {@code tags} is the comma-separated tag list (API field "gametype"), shown as "Tags" in the browser. */
+    record ServerInfo(String ip, int port, int queryPort, String name, String map, String tags,
                       int players, int maxPlayers, int bots) {
 
         String addr() {
@@ -203,7 +204,7 @@ final class SteamServerQuery {
             if (port == 0) {
                 port = queryPort;
             }
-            result.add(new ServerInfo(ip, port, queryPort, str(m.get("name")), str(m.get("map")),
+            result.add(new ServerInfo(ip, port, queryPort, str(m.get("name")), str(m.get("map")), str(m.get("gametype")),
                     num(m.get("players")), num(m.get("max_players")), num(m.get("bots"))));
         }
         return result;
